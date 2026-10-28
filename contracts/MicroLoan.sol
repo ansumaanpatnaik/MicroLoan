@@ -7,7 +7,8 @@ contract MicroLoan {
         Funded,
         Withdrawn,
         Repaid,
-        Defaulted
+        Defaulted,
+        Expired
     }
 
     struct Loan {
@@ -52,6 +53,13 @@ contract MicroLoan {
     );
 
     event LoanDefaulted(
+        uint256 indexed loanId,
+        address indexed caller,
+        Status indexed previousStatus,
+        uint256 principalRefunded
+    );
+
+    event LoanExpired(
         uint256 indexed loanId,
         address indexed caller,
         Status indexed previousStatus,
@@ -148,28 +156,37 @@ contract MicroLoan {
         Loan storage loan = _getLoan(loanId);
         Status previousStatus = loan.status;
 
-        if (previousStatus == Status.Repaid || previousStatus == Status.Defaulted) {
+        if (previousStatus == Status.Repaid || previousStatus == Status.Defaulted || previousStatus == Status.Requested || previousStatus == Status.Funded || previousStatus == Status.Expired) {
+            revert InvalidState(loanId, previousStatus);
+        }
+        if (block.timestamp <= loan.dueDate) revert DeadlineNotPassed(loanId, loan.dueDate);
+        // previousStatus == Status.Withdrawn
+        loan.status = Status.Defaulted;
+        emit LoanDefaulted(loanId, msg.sender, previousStatus, 0);
+    }
+
+    function markExpired(uint256 loanId) external nonReentrant {
+        Loan storage loan = _getLoan(loanId);
+        Status previousStatus = loan.status;
+
+        if (previousStatus == Status.Repaid || previousStatus == Status.Defaulted || previousStatus == Status.Expired) {
             revert InvalidState(loanId, previousStatus);
         }
         if (block.timestamp <= loan.dueDate) revert DeadlineNotPassed(loanId, loan.dueDate);
 
         if (previousStatus == Status.Requested) {
-            loan.status = Status.Defaulted;
-            emit LoanDefaulted(loanId, msg.sender, previousStatus, 0);
+            loan.status = Status.Expired;
+            emit LoanExpired(loanId, msg.sender, previousStatus, 0);
             return;
         }
 
         if (previousStatus == Status.Funded) {
             uint256 refund = loan.principal;
-            loan.status = Status.Defaulted;
+            loan.status = Status.Expired;
             _sendValue(loan.lender, refund);
-            emit LoanDefaulted(loanId, msg.sender, previousStatus, refund);
+            emit LoanExpired(loanId, msg.sender, previousStatus, refund);
             return;
         }
-
-        // previousStatus == Status.Withdrawn
-        loan.status = Status.Defaulted;
-        emit LoanDefaulted(loanId, msg.sender, previousStatus, 0);
     }
 
     function _getLoan(uint256 loanId) internal view returns (Loan storage loan) {
