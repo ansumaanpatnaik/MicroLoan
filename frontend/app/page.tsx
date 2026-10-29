@@ -5,7 +5,6 @@ import {
   Contract,
   formatEther,
   isAddress,
-  parseEther,
   type ContractTransactionResponse,
   type Eip1193Provider,
 } from "ethers";
@@ -229,7 +228,10 @@ export default function Home() {
     if (!canTransact) return;
     setError("");
     try {
-      const amount = parseEther(principal);
+      if (!/^\d+$/.test(principal)) {
+        throw new Error("Enter the loan amount as a whole number of wei.");
+      }
+      const amount = BigInt(principal);
       const days = BigInt(durationDays);
       const hours = BigInt(durationHours);
       const minutes = BigInt(durationMinutes);
@@ -326,8 +328,8 @@ export default function Home() {
                 <span className="section-glyph glyph-coral"><Coins size={19} /></span>
               </div>
               <form className="request-form" onSubmit={requestLoan}>
-                <label htmlFor="principal">How much do you need?</label>
-                <div className="amount-input-wrap"><input id="principal" inputMode="decimal" min="0" onChange={(event) => setPrincipal(event.target.value)} placeholder="0.00" required step="any" type="number" value={principal} /><span>ETH</span></div>
+                <label htmlFor="principal">Loan amount (wei)</label>
+                <div className="amount-input-wrap"><input id="principal" autoComplete="off" inputMode="numeric" onChange={(event) => setPrincipal(event.target.value)} pattern="[0-9]*" placeholder="e.g. 1000000000000000000" required type="text" value={principal} /><span>wei</span></div>
                 <label htmlFor="duration">Repayment window</label>
                 <div className="duration-input-wrap"><input id="duration" min="0" onChange={(event) => setDurationDays(event.target.value)} required type="number" value={durationDays} /><span>days</span><Clock3 size={17} /></div>
                 <div className="duration-units">
@@ -344,7 +346,7 @@ export default function Home() {
                     <div className="duration-input-wrap"><input id="duration-seconds" max="59" min="0" onChange={(event) => setDurationSeconds(event.target.value)} required step="1" type="number" value={durationSeconds} /></div>
                   </div>
                 </div>
-                <div className="repayment-note"><span>This form adds 2% to the repayment.</span><span>{principal && Number(principal) > 0 ? `${(Number(principal) * 1.02).toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH` : "—"}</span></div>
+                <div className="repayment-note"><span>Repayment (includes 2% fee)</span><span>{/^\d+$/.test(principal) && BigInt(principal) > 0n ? `${(BigInt(principal) + BigInt(principal) / 50n).toString()} wei` : "—"}</span></div>
                 <button className="primary-button" disabled={!canTransact || Boolean(busy)} type="submit">
                   {busy === "request" ? <LoaderCircle className="spin" size={17} /> : <ArrowUpRight size={17} />}
                   {busy === "request" ? "Submitting…" : "Publish loan request"}
