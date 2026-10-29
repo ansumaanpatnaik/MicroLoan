@@ -63,8 +63,15 @@ function dateLabel(timestamp: bigint) {
   });
 }
 
-function duePassed(timestamp: bigint) {
-  return BigInt(Math.floor(Date.now() / 1000)) > timestamp;
+function duePassed(timestamp: bigint, currentTimestamp: bigint) {
+  return currentTimestamp > timestamp;
+}
+
+function effectiveLoanStatus(loan: Loan, currentTimestamp: bigint) {
+  if (currentTimestamp <= loan.dueDate) return loan.status;
+  if (loan.status === 0 || loan.status === 1) return 5;
+  if (loan.status === 2) return 4;
+  return loan.status;
 }
 
 function LoanStatus({ status }: { status: number }) {
@@ -86,6 +93,9 @@ export default function Home() {
   const [account, setAccount] = useState("");
   const [chainId, setChainId] = useState<number | null>(null);
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [currentTimestamp, setCurrentTimestamp] = useState(() =>
+    BigInt(Math.floor(Date.now() / 1000)),
+  );
   const [principal, setPrincipal] = useState("");
   const [durationDays, setDurationDays] = useState("30");
   const [durationHours, setDurationHours] = useState("0");
@@ -99,6 +109,13 @@ export default function Home() {
   const configured = isAddress(CONTRACT_ADDRESS);
   const onSepolia = chainId === SEPOLIA_CHAIN_ID;
   const canTransact = Boolean(account && onSepolia && configured);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTimestamp(BigInt(Math.floor(Date.now() / 1000)));
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const ethereum = window.ethereum;
@@ -259,9 +276,14 @@ export default function Home() {
   }
 
   const myLoans = loans.filter((loan) => loan.borrower.toLowerCase() === account.toLowerCase());
-  const requestedLoans = loans.filter((loan) => loan.status === 0 && !duePassed(loan.dueDate));
+  const requestedLoans = loans.filter(
+    (loan) => loan.status === 0 && currentTimestamp <= loan.dueDate,
+  );
   const myPortfolio = loans.filter((loan) => loan.lender.toLowerCase() === account.toLowerCase());
-  const activeCount = loans.filter((loan) => loan.status === 1 || loan.status === 2).length;
+  const activeCount = loans.filter((loan) => {
+    const status = effectiveLoanStatus(loan, currentTimestamp);
+    return status === 1 || status === 2;
+  }).length;
 
   return (
     <main className="app-shell">
@@ -360,7 +382,7 @@ export default function Home() {
               </div>
               {!account ? <EmptyState title="Your loans live here" detail="Connect the wallet used to request a loan to see its status and next steps." /> : myLoans.length === 0 ? <EmptyState title="No loan requests yet" detail="Create a request to get started. Once funded, you can withdraw and repay from here." /> : (
                 <div className="loan-list">
-                  {myLoans.map((loan) => <LoanRow key={loan.id.toString()} loan={loan} busy={busy} canTransact={canTransact} onAction={transact} />)}
+                  {myLoans.map((loan) => <LoanRow key={loan.id.toString()} loan={loan} busy={busy} canTransact={canTransact} currentTimestamp={currentTimestamp} onAction={transact} />)}
                 </div>
               )}
             </section>
@@ -378,7 +400,7 @@ export default function Home() {
                     <article className="loan-row lender-row" key={loan.id.toString()}>
                       <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{weiAmount(loan.principal)}</strong><span className="loan-person">Borrower · {shortAddress(loan.borrower)}</span></div>
                       <div className="loan-facts"><span>Repayment</span><strong>{weiAmount(loan.repayment)}</strong><span>Due {dateLabel(loan.dueDate)}</span></div>
-                      <button className="fund-button" disabled={!canTransact || Boolean(busy) || duePassed(loan.dueDate) || loan.borrower.toLowerCase() === account.toLowerCase()} onClick={() => transact(`fund-${loan.id}`, (contract) => contract.fund(loan.id, { value: loan.principal }) as Promise<ContractTransactionResponse>)} type="button">
+                      <button className="fund-button" disabled={!canTransact || Boolean(busy) || duePassed(loan.dueDate, currentTimestamp) || loan.borrower.toLowerCase() === account.toLowerCase()} onClick={() => transact(`fund-${loan.id}`, (contract) => contract.fund(loan.id, { value: loan.principal }) as Promise<ContractTransactionResponse>)} type="button">
                         {busy === `fund-${loan.id}` ? <LoaderCircle className="spin" size={15} /> : <HandCoins size={15} />}{loan.borrower.toLowerCase() === account.toLowerCase() ? "Your request" : "Fund"}
                       </button>
                     </article>
@@ -397,7 +419,7 @@ export default function Home() {
                     <article className="loan-row portfolio-row" key={loan.id.toString()}>
                       <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{weiAmount(loan.principal)}</strong><span className="loan-person">Borrower · {shortAddress(loan.borrower)}</span></div>
                       <div className="loan-facts"><span>Repayment</span><strong>{weiAmount(loan.repayment)}</strong><span>Due {dateLabel(loan.dueDate)}</span></div>
-                      <LoanStatus status={loan.status} />
+                      <LoanStatus status={effectiveLoanStatus(loan, currentTimestamp)} />
                     </article>
                   ))}
                 </div>
@@ -416,21 +438,23 @@ function LoanRow({
   loan,
   busy,
   canTransact,
+  currentTimestamp,
   onAction,
 }: {
   loan: Loan;
   busy: string;
   canTransact: boolean;
+  currentTimestamp: bigint;
   onAction: (key: string, send: (contract: Contract) => Promise<ContractTransactionResponse>) => Promise<void>;
 }) {
   const actionKey = `loan-${loan.id}`;
   return (
     <article className="loan-row borrower-row">
       <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{weiAmount(loan.principal)}</strong><span className="loan-person">Repay {weiAmount(loan.repayment)}</span></div>
-      <div className="loan-facts"><LoanStatus status={loan.status} /><span>Due {dateLabel(loan.dueDate)}</span>{loan.lender && loan.lender !== "0x0000000000000000000000000000000000000000" && <span>Lender · {shortAddress(loan.lender)}</span>}</div>
+      <div className="loan-facts"><LoanStatus status={effectiveLoanStatus(loan, currentTimestamp)} /><span>Due {dateLabel(loan.dueDate)}</span>{loan.lender && loan.lender !== "0x0000000000000000000000000000000000000000" && <span>Lender · {shortAddress(loan.lender)}</span>}</div>
       <div className="loan-actions">
-        {loan.status === 1 && !duePassed(loan.dueDate) && <button className="row-action" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.withdraw(loan.id) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <ArrowDownLeft size={15} />}Withdraw</button>}
-        {loan.status === 2 && !duePassed(loan.dueDate) && <button className="row-action action-green" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.repay(loan.id, { value: loan.repayment }) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}Repay</button>}
+        {loan.status === 1 && !duePassed(loan.dueDate, currentTimestamp) && <button className="row-action" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.withdraw(loan.id) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <ArrowDownLeft size={15} />}Withdraw</button>}
+        {loan.status === 2 && !duePassed(loan.dueDate, currentTimestamp) && <button className="row-action action-green" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.repay(loan.id, { value: loan.repayment }) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}Repay</button>}
       </div>
     </article>
   );
