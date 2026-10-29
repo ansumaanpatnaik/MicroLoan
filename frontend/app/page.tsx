@@ -3,7 +3,6 @@
 import {
   BrowserProvider,
   Contract,
-  formatEther,
   isAddress,
   type ContractTransactionResponse,
   type Eip1193Provider,
@@ -52,9 +51,8 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function eth(value: bigint) {
-  const amount = Number(formatEther(value));
-  return `${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH`;
+function weiAmount(value: bigint) {
+  return `${value.toString()} wei`;
 }
 
 function dateLabel(timestamp: bigint) {
@@ -378,8 +376,8 @@ export default function Home() {
                 <div className="loan-list">
                   {requestedLoans.map((loan) => (
                     <article className="loan-row lender-row" key={loan.id.toString()}>
-                      <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{eth(loan.principal)}</strong><span className="loan-person">Borrower · {shortAddress(loan.borrower)}</span></div>
-                      <div className="loan-facts"><span>Repayment</span><strong>{eth(loan.repayment)}</strong><span>Due {dateLabel(loan.dueDate)}</span></div>
+                      <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{weiAmount(loan.principal)}</strong><span className="loan-person">Borrower · {shortAddress(loan.borrower)}</span></div>
+                      <div className="loan-facts"><span>Repayment</span><strong>{weiAmount(loan.repayment)}</strong><span>Due {dateLabel(loan.dueDate)}</span></div>
                       <button className="fund-button" disabled={!canTransact || Boolean(busy) || duePassed(loan.dueDate) || loan.borrower.toLowerCase() === account.toLowerCase()} onClick={() => transact(`fund-${loan.id}`, (contract) => contract.fund(loan.id, { value: loan.principal }) as Promise<ContractTransactionResponse>)} type="button">
                         {busy === `fund-${loan.id}` ? <LoaderCircle className="spin" size={15} /> : <HandCoins size={15} />}{loan.borrower.toLowerCase() === account.toLowerCase() ? "Your request" : "Fund"}
                       </button>
@@ -397,10 +395,9 @@ export default function Home() {
                 <div className="loan-list">
                   {myPortfolio.map((loan) => (
                     <article className="loan-row portfolio-row" key={loan.id.toString()}>
-                      <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{eth(loan.principal)}</strong><span className="loan-person">Borrower · {shortAddress(loan.borrower)}</span></div>
-                      <div className="loan-facts"><span>Repayment</span><strong>{eth(loan.repayment)}</strong><span>Due {dateLabel(loan.dueDate)}</span></div>
+                      <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{weiAmount(loan.principal)}</strong><span className="loan-person">Borrower · {shortAddress(loan.borrower)}</span></div>
+                      <div className="loan-facts"><span>Repayment</span><strong>{weiAmount(loan.repayment)}</strong><span>Due {dateLabel(loan.dueDate)}</span></div>
                       <LoanStatus status={loan.status} />
-                      {(loan.status === 1 || loan.status === 2) && duePassed(loan.dueDate) && <button className="row-action action-coral" disabled={!canTransact || Boolean(busy)} onClick={() => transact(`settle-${loan.id}`, (contract) => (loan.status === 1 ? contract.markExpired(loan.id) : contract.markDefault(loan.id)) as Promise<ContractTransactionResponse>)} type="button">{busy === `settle-${loan.id}` ? <LoaderCircle className="spin" size={15} /> : <Clock3 size={15} />}{loan.status === 1 ? "Refund principal" : "Mark default"}</button>}
                     </article>
                   ))}
                 </div>
@@ -429,12 +426,11 @@ function LoanRow({
   const actionKey = `loan-${loan.id}`;
   return (
     <article className="loan-row borrower-row">
-      <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{eth(loan.principal)}</strong><span className="loan-person">Repay {eth(loan.repayment)}</span></div>
+      <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{weiAmount(loan.principal)}</strong><span className="loan-person">Repay {weiAmount(loan.repayment)}</span></div>
       <div className="loan-facts"><LoanStatus status={loan.status} /><span>Due {dateLabel(loan.dueDate)}</span>{loan.lender && loan.lender !== "0x0000000000000000000000000000000000000000" && <span>Lender · {shortAddress(loan.lender)}</span>}</div>
       <div className="loan-actions">
         {loan.status === 1 && !duePassed(loan.dueDate) && <button className="row-action" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.withdraw(loan.id) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <ArrowDownLeft size={15} />}Withdraw</button>}
         {loan.status === 2 && !duePassed(loan.dueDate) && <button className="row-action action-green" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.repay(loan.id, { value: loan.repayment }) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}Repay</button>}
-        {loan.status <= 2 && duePassed(loan.dueDate) && <button className="row-action action-coral" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => (loan.status === 2 ? contract.markDefault(loan.id) : contract.markExpired(loan.id)) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <Clock3 size={15} />}{loan.status === 0 ? "Expire request" : loan.status === 1 ? "Refund lender" : "Mark default"}</button>}
       </div>
     </article>
   );
