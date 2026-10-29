@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Common Ground | Microloan Market",
-  description: "A peer-to-peer microloan market on Sepolia.",
+  title: "MicroLoan | Peer-to-peer lending",
+  description: "Request, fund, and repay peer-to-peer loans on Sepolia.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

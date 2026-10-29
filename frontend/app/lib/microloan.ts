@@ -6,6 +6,7 @@ export const MICROLOAN_ABI = [
   "function withdraw(uint256 loanId)",
   "function repay(uint256 loanId) payable",
   "function markDefault(uint256 loanId)",
+  "function markExpired(uint256 loanId)",
 ] as const;
 
 export type Loan = {

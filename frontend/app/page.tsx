@@ -42,7 +42,7 @@ type View = "borrower" | "lender";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MICROLOAN_ADDRESS ?? "";
 const SEPOLIA_CHAIN_ID = 11155111;
-const STATUS_NAMES = ["Requested", "Funded", "Withdrawn", "Repaid", "Defaulted"];
+const STATUS_NAMES = ["Requested", "Funded", "Withdrawn", "Repaid", "Defaulted", "Expired"];
 
 function getProvider() {
   if (!window.ethereum) throw new Error("Install MetaMask to use the loan market.");
@@ -247,9 +247,9 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#market" aria-label="Common Ground home">
+        <a className="brand" href="#market" aria-label="MicroLoan home">
           <span className="brand-mark"><Landmark size={19} strokeWidth={2.2} /></span>
-          <span>COMMON<span className="brand-light">GROUND</span></span>
+          <span>Micro<span className="brand-light">Loan</span></span>
         </a>
         <div className="topbar-right">
           <span className={`network-label ${onSepolia ? "network-live" : ""}`}>
@@ -365,7 +365,7 @@ export default function Home() {
                       <div className="loan-main"><span className="loan-id">LOAN #{loan.id.toString().padStart(4, "0")}</span><strong>{eth(loan.principal)}</strong><span className="loan-person">Borrower · {shortAddress(loan.borrower)}</span></div>
                       <div className="loan-facts"><span>Repayment</span><strong>{eth(loan.repayment)}</strong><span>Due {dateLabel(loan.dueDate)}</span></div>
                       <LoanStatus status={loan.status} />
-                      {(loan.status === 1 || loan.status === 2) && duePassed(loan.dueDate) && <button className="row-action action-coral" disabled={!canTransact || Boolean(busy)} onClick={() => transact(`default-${loan.id}`, (contract) => contract.markDefault(loan.id) as Promise<ContractTransactionResponse>)} type="button">{busy === `default-${loan.id}` ? <LoaderCircle className="spin" size={15} /> : <Clock3 size={15} />}{loan.status === 1 ? "Refund principal" : "Mark default"}</button>}
+                      {(loan.status === 1 || loan.status === 2) && duePassed(loan.dueDate) && <button className="row-action action-coral" disabled={!canTransact || Boolean(busy)} onClick={() => transact(`settle-${loan.id}`, (contract) => (loan.status === 1 ? contract.markExpired(loan.id) : contract.markDefault(loan.id)) as Promise<ContractTransactionResponse>)} type="button">{busy === `settle-${loan.id}` ? <LoaderCircle className="spin" size={15} /> : <Clock3 size={15} />}{loan.status === 1 ? "Refund principal" : "Mark default"}</button>}
                     </article>
                   ))}
                 </div>
@@ -399,7 +399,7 @@ function LoanRow({
       <div className="loan-actions">
         {loan.status === 1 && !duePassed(loan.dueDate) && <button className="row-action" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.withdraw(loan.id) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <ArrowDownLeft size={15} />}Withdraw</button>}
         {loan.status === 2 && !duePassed(loan.dueDate) && <button className="row-action action-green" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.repay(loan.id, { value: loan.repayment }) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}Repay</button>}
-        {loan.status <= 2 && duePassed(loan.dueDate) && <button className="row-action action-coral" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => contract.markDefault(loan.id) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <Clock3 size={15} />}{loan.status === 1 ? "Refund lender" : "Mark default"}</button>}
+        {loan.status <= 2 && duePassed(loan.dueDate) && <button className="row-action action-coral" disabled={!canTransact || Boolean(busy)} onClick={() => onAction(actionKey, (contract) => (loan.status === 2 ? contract.markDefault(loan.id) : contract.markExpired(loan.id)) as Promise<ContractTransactionResponse>)} type="button">{busy === actionKey ? <LoaderCircle className="spin" size={15} /> : <Clock3 size={15} />}{loan.status === 0 ? "Expire request" : loan.status === 1 ? "Refund lender" : "Mark default"}</button>}
       </div>
     </article>
   );
