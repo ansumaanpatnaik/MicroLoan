@@ -91,6 +91,9 @@ export default function Home() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [principal, setPrincipal] = useState("");
   const [durationDays, setDurationDays] = useState("30");
+  const [durationHours, setDurationHours] = useState("0");
+  const [durationMinutes, setDurationMinutes] = useState("0");
+  const [durationSeconds, setDurationSeconds] = useState("0");
   const [busy, setBusy] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -228,10 +231,26 @@ export default function Home() {
     try {
       const amount = parseEther(principal);
       const days = BigInt(durationDays);
-      if (amount <= 0n || days <= 0n) throw new Error("Enter a positive amount and duration.");
+      const hours = BigInt(durationHours);
+      const minutes = BigInt(durationMinutes);
+      const seconds = BigInt(durationSeconds);
+      if (
+        amount <= 0n ||
+        days < 0n ||
+        hours < 0n ||
+        hours > 23n ||
+        minutes < 0n ||
+        minutes > 59n ||
+        seconds < 0n ||
+        seconds > 59n
+      ) {
+        throw new Error("Enter a positive amount and a valid duration.");
+      }
+      const duration = days * 86_400n + hours * 3_600n + minutes * 60n + seconds;
+      if (duration <= 0n) throw new Error("Enter a duration greater than zero.");
       const repayment = amount + amount / 50n;
       await transact("request", (contract) =>
-        contract.requestLoan(amount, repayment, days * 86_400n) as Promise<ContractTransactionResponse>,
+        contract.requestLoan(amount, repayment, duration) as Promise<ContractTransactionResponse>,
       );
       setPrincipal("");
     } catch (caught) {
@@ -310,7 +329,21 @@ export default function Home() {
                 <label htmlFor="principal">How much do you need?</label>
                 <div className="amount-input-wrap"><input id="principal" inputMode="decimal" min="0" onChange={(event) => setPrincipal(event.target.value)} placeholder="0.00" required step="any" type="number" value={principal} /><span>ETH</span></div>
                 <label htmlFor="duration">Repayment window</label>
-                <div className="duration-input-wrap"><input id="duration" min="1" onChange={(event) => setDurationDays(event.target.value)} required type="number" value={durationDays} /><span>days</span><Clock3 size={17} /></div>
+                <div className="duration-input-wrap"><input id="duration" min="0" onChange={(event) => setDurationDays(event.target.value)} required type="number" value={durationDays} /><span>days</span><Clock3 size={17} /></div>
+                <div className="duration-units">
+                  <div className="duration-unit">
+                    <label htmlFor="duration-hours">Hours</label>
+                    <div className="duration-input-wrap"><input id="duration-hours" max="23" min="0" onChange={(event) => setDurationHours(event.target.value)} required step="1" type="number" value={durationHours} /></div>
+                  </div>
+                  <div className="duration-unit">
+                    <label htmlFor="duration-minutes">Minutes</label>
+                    <div className="duration-input-wrap"><input id="duration-minutes" max="59" min="0" onChange={(event) => setDurationMinutes(event.target.value)} required step="1" type="number" value={durationMinutes} /></div>
+                  </div>
+                  <div className="duration-unit">
+                    <label htmlFor="duration-seconds">Seconds</label>
+                    <div className="duration-input-wrap"><input id="duration-seconds" max="59" min="0" onChange={(event) => setDurationSeconds(event.target.value)} required step="1" type="number" value={durationSeconds} /></div>
+                  </div>
+                </div>
                 <div className="repayment-note"><span>This form adds 2% to the repayment.</span><span>{principal && Number(principal) > 0 ? `${(Number(principal) * 1.02).toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH` : "—"}</span></div>
                 <button className="primary-button" disabled={!canTransact || Boolean(busy)} type="submit">
                   {busy === "request" ? <LoaderCircle className="spin" size={17} /> : <ArrowUpRight size={17} />}

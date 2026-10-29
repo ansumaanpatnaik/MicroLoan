@@ -496,6 +496,22 @@ h1 span {
   height: 42px;
 }
 
+.duration-units {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.duration-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.duration-unit label {
+  margin-top: 0;
+}
+
 .duration-input-wrap input {
   font-size: 14px;
 }
